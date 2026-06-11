@@ -1,10 +1,16 @@
 local config = {}
 
--- Адреса GPU в порядке страниц
--- Страница 1 -> GPUS[1], Страница 2 -> GPUS[2]
-config.GPUS = {
-    "a11284b1-6293-46d6-b341-cdd7fa3bc154",
-    "4e2ecd4c-c4ad-4855-9fa4-2d009abab9eb",
+-- Пары GPU -> Screen в порядке страниц
+-- Страница 1 -> MONITORS[1], Страница 2 -> MONITORS[2]
+config.MONITORS = {
+    {
+        gpu    = "a11284b1-6293-46d6-b341-cdd7fa3bc154",
+        screen = "1f535934-87cb-452d-babf-5bd86288db5d",
+    },
+    {
+        gpu    = "4e2ecd4c-c4ad-4855-9fa4-2d009abab9eb",
+        screen = "5fd6904f-f26c-47dc-947e-5f17e4a54be1",
+    },
 }
 
 -- Масштаб экрана (2 = крупный шрифт)
@@ -29,6 +35,5 @@ config.COLOR_ORANGE = 0xFF8C00
 config.COLOR_WHITE  = 0xFFFFFF
 config.COLOR_GRAY   = 0x808080
 config.COLOR_CYAN   = 0x00FFFF
-config.COLOR_RED    = 0xFF4444
 
 return config

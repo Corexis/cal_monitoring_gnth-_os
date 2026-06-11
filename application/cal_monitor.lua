@@ -11,20 +11,27 @@ local stats     = require("lib/stats")
 local collector = require("lib/collector")
 local renderer  = require("lib/renderer")
 
--- Инициализация рендереров для каждого GPU
-local renderers  = {}
-local old_res    = {}
+-- Инициализация рендереров: bind GPU к экрану и установка разрешения
+local renderers = {}
+local old_res   = {}
 
-for i, gpu_addr in ipairs(config.GPUS) do
-    local ok, gpu_proxy = pcall(component.proxy, gpu_addr)
-    if ok and gpu_proxy then
-        local r = renderer.new(gpu_proxy)
+for i, mon in ipairs(config.MONITORS) do
+    local ok, gpu_proxy = pcall(component.proxy, mon.gpu)
+    if not ok or not gpu_proxy then
+        print("Предупреждение: GPU " .. mon.gpu .. " не найден, пропускаем.")
+    else
+        -- Bind GPU к нужному экрану (персистентно на время сессии)
+        local bind_ok, bind_err = pcall(gpu_proxy.bind, mon.screen)
+        if not bind_ok then
+            print("Предупреждение: не удалось привязать GPU к экрану: " .. tostring(bind_err))
+        end
+
         local ow, oh = gpu_proxy.getResolution()
-        old_res[i] = { ow, oh }
+        old_res[#renderers + 1] = { ow, oh }
+
+        local r = renderer.new(gpu_proxy)
         r.init()
         table.insert(renderers, r)
-    else
-        print("Предупреждение: GPU " .. gpu_addr .. " не найден, пропускаем.")
     end
 end
 
@@ -41,10 +48,9 @@ local function cleanup()
     machines.shutdown()
     stats.save()
     for i, r in ipairs(renderers) do
-        local ow, oh = table.unpack(old_res[i])
+        local ow, oh = old_res[i][1], old_res[i][2]
         r.restore(ow, oh)
     end
-    -- Восстанавливаем основной терминал
     local main_gpu = component.gpu
     main_gpu.setForeground(config.COLOR_WHITE)
     term.clear()
@@ -62,24 +68,17 @@ while true do
         machines.removeMachine(addr)
     end
 
-    -- Берём высоту экрана с первого рендерера для пагинации
+    -- Берём высоту с первого рендерера для пагинации
     local _, scrH = renderers[1].getResolution()
-
-    local pages, _ = collector.paginate(groups, free, scrH, max_name_len, max_ratio_len)
+    local pages   = collector.paginate(groups, free, scrH, max_name_len, max_ratio_len)
     local total_pages = #pages
 
-    -- Распределяем страницы по мониторам
-    -- Монитор 1 -> страница 1, Монитор 2 -> страница 2, и т.д.
-    -- Если страниц больше чем мониторов — остаток на последнем мониторе
     for i, r in ipairs(renderers) do
         local page = pages[i]
         if page then
             r.drawPage(page, groups, free, total_machines, i, total_pages, max_name_len, max_ratio_len)
         else
-            -- Монитор без страницы — показываем заглушку
-            local _, scrH2 = r.getResolution()
-            local scrW2, _ = r.getResolution()
-            -- Пустой экран с подписью
+            -- Монитор без контента — пустая страница
             r.drawPage(
                 { techs = {}, has_free = false },
                 free, total_machines, i, total_pages, max_name_len, max_ratio_len
